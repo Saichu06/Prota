@@ -1,0 +1,30 @@
+# Root gitignore for Prota
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Secrets and API keys
+**/apikey.txt
+assets/apikey.txt
+*.key
+*.pem
+.env
+.env.local
+.env.*.local
+
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+**/target/
+**/build/
+**/dist/
+**/node_modules/

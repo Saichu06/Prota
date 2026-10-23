@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./fonts.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Route every Tailwind font token (and preflight's default) through the selected app font. */
+@theme {
+  --font-sans: var(--app-font);
+  --font-serif: var(--app-font);
+}
+
+@layer base {
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--app-font);
+    color-scheme: light dark;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  /* Safe area insets for mobile navigation */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0.5rem);
+  }
+}
