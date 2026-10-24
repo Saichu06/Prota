@@ -1,0 +1,41 @@
+# Git & Version Control
+.git/
+.gitignore
+.gitattributes
+
+# Environment Files & Secrets (NEVER BAKE SECRETS)
+.env
+.env.*
+*.key
+*.pem
+apikey.txt
+**/apikey.txt
+
+# Local Build Outputs & Bytecode
+target/
+*.class
+
+# IDE & Editor Metadata
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.settings/
+.classpath
+.project
+.sts4-cache/
+
+# Logs & Temporary Scratch Files
+*.log
+logs/
+temp/
+tmp/
+scratch/
+
+# Local User Uploads (Mount a Render Disk or Persistent Volume instead)
+uploads/
+
+# Documentation
+*.md
+HELP.md
