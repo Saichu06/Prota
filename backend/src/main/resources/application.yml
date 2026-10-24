@@ -40,7 +40,7 @@ server:
         name: PROTASESSIONID
         http-only: true
         secure: ${COOKIE_SECURE:false}
-        same-site: lax
+        same-site: ${COOKIE_SAME_SITE:lax}
         path: /
 
 management:
