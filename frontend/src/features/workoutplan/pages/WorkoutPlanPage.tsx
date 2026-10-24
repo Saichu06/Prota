@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Dumbbell, Bookmark, Wand2 } from 'lucide-react'
+import { useAuth } from '../../../hooks/useAuth'
 import { WorkoutPlanWizard } from '../components/WorkoutPlanWizard'
 import { WorkoutPlanReviewView } from '../components/WorkoutPlanReviewView'
 import { SavedWorkoutPlansList } from '../components/SavedWorkoutPlansList'
@@ -10,6 +11,7 @@ import type {
 } from '../../../types/api'
 
 export function WorkoutPlanPage() {
+  const { settings } = useAuth()
   const [activeTab, setActiveTab] = useState<'create' | 'saved'>('create')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
@@ -158,6 +160,7 @@ export function WorkoutPlanPage() {
           />
         ) : (
           <WorkoutPlanWizard
+            initialWeightUnit={settings?.weightUnit === 'LB' ? 'LB' : 'KG'}
             onGenerate={handleGenerate}
             isGenerating={isGenerating}
             error={generationError}

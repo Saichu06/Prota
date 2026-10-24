@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Sparkles, Bookmark, Wand2 } from 'lucide-react'
+import { useAuth } from '../../../hooks/useAuth'
 import { DietPlanWizard } from '../components/DietPlanWizard'
 import { DietPlanReviewView } from '../components/DietPlanReviewView'
 import { SavedDietPlansList } from '../components/SavedDietPlansList'
@@ -10,6 +11,7 @@ import type {
 } from '../../../types/api'
 
 export function DietPlanPage() {
+  const { settings } = useAuth()
   const [activeTab, setActiveTab] = useState<'create' | 'saved'>('create')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
@@ -157,6 +159,7 @@ export function DietPlanPage() {
           />
         ) : (
           <DietPlanWizard
+            initialWeightUnit={settings?.weightUnit === 'LB' ? 'LB' : 'KG'}
             onGenerate={handleGenerate}
             isGenerating={isGenerating}
             error={generationError}

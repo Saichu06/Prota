@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
 import { getCookie, getCsrfToken } from '../lib/csrf'
 
@@ -57,3 +57,52 @@ describe('CSRF Cookie Extraction', () => {
     expect(getCsrfToken()).toBe('token+with+special/chars')
   })
 })
+
+describe('apiClient Retry and Error Handling', () => {
+  it('retries GET on 502/504 gateway wake-up errors and succeeds when server responds', async () => {
+    const { apiClient } = await import('../lib/api-client')
+
+    let callCount = 0
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      callCount++
+      if (callCount === 1) {
+        return new Response('Bad Gateway', { status: 502, statusText: 'Bad Gateway' })
+      }
+      return new Response(JSON.stringify({ status: 'UP' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+
+    try {
+      const result = await apiClient.get<{ status: string }>('/health')
+      expect(result).toEqual({ status: 'UP' })
+      expect(callCount).toBe(2)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('does NOT retry client errors like 401 Unauthorized or 404 Not Found', async () => {
+    const { apiClient, ApiError } = await import('../lib/api-client')
+
+    let callCount = 0
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      callCount++
+      return new Response(JSON.stringify({ code: 'NOT_FOUND', message: 'Resource not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+
+    try {
+      await expect(apiClient.get('/unknown-item')).rejects.toThrow(ApiError)
+      expect(callCount).toBe(1)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
+

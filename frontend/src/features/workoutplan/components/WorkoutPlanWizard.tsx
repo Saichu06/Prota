@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import {
   User,
   Dumbbell,
@@ -24,6 +24,7 @@ import type {
 } from '../../../types/api'
 
 interface WorkoutPlanWizardProps {
+  initialWeightUnit?: 'KG' | 'LB'
   onGenerate: (request: WorkoutPlanGenerateRequest) => Promise<void>
   isGenerating: boolean
   error?: string | null
@@ -67,6 +68,7 @@ const GYM_EQUIPMENT = [
 ]
 
 export function WorkoutPlanWizard({
+  initialWeightUnit = 'KG',
   onGenerate,
   isGenerating,
   error,
@@ -80,7 +82,13 @@ export function WorkoutPlanWizard({
   const [heightFeet, setHeightFeet] = useState<string>('5')
   const [heightInches, setHeightInches] = useState<string>('9')
   const [weightValue, setWeightValue] = useState<string>('75')
-  const [weightUnit, setWeightUnit] = useState<'KG' | 'LB'>('KG')
+  const [weightUnit, setWeightUnit] = useState<'KG' | 'LB'>(initialWeightUnit)
+
+  useEffect(() => {
+    if (initialWeightUnit) {
+      setWeightUnit(initialWeightUnit)
+    }
+  }, [initialWeightUnit])
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('INTERMEDIATE')
   const [primaryGoal, setPrimaryGoal] = useState<WorkoutGoal>('MUSCLE_HYPERTROPHY')
   const [secondaryGoal, setSecondaryGoal] = useState<string>('NONE')

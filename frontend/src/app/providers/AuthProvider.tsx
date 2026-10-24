@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { apiClient } from '../../lib/api-client'
+import { apiClient, ApiError } from '../../lib/api-client'
 import { useTheme } from '../../hooks/useTheme'
 import { AuthContext } from './AuthContext'
 import type {
@@ -15,6 +15,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(null)
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [serverError, setServerError] = useState<string | null>(null)
   const { syncBackendTheme } = useTheme()
 
   const refreshSettings = useCallback(async () => {
@@ -31,16 +32,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
+      setServerError(null)
       const userData = await apiClient.get<UserResponse>('/auth/me')
       setUser(userData)
       await refreshSettings()
-    } catch {
-      setUser(null)
-      setSettings(null)
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null)
+        setSettings(null)
+      } else {
+        setServerError('Server is temporarily unreachable or waking up from inactivity.')
+      }
     } finally {
       setIsLoading(false)
     }
   }, [refreshSettings])
+
+  const retryAuth = useCallback(async () => {
+    setIsLoading(true)
+    setServerError(null)
+    await refreshUser()
+  }, [refreshUser])
 
   // Bootstrap check on application load
   useEffect(() => {
@@ -48,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const bootstrap = async () => {
       try {
+        setServerError(null)
         const userData = await apiClient.get<UserResponse>('/auth/me')
         if (!isMounted) return
         setUser(userData)
@@ -61,10 +74,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // Non-fatal
         }
-      } catch {
+      } catch (err: unknown) {
         if (!isMounted) return
-        setUser(null)
-        setSettings(null)
+        if (err instanceof ApiError && err.status === 401) {
+          setUser(null)
+          setSettings(null)
+        } else {
+          // Server error or wake-up timeout: keep track so route guards don't falsely 404
+          setServerError('Server is temporarily unreachable or waking up from inactivity.')
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false)
@@ -155,6 +173,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         uploadAvatar,
         removeAvatar,
         updateSettings,
+        serverError,
+        retryAuth,
         refreshUser,
         refreshSettings,
       }}

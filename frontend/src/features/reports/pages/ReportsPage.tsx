@@ -15,23 +15,30 @@ import {
   Layers,
   ChevronDown,
 } from 'lucide-react'
-import {
-  reportService,
-  type ReportType,
-  type CsvExportType,
-  type ReportPreviewResponse,
-} from '../services/reportService'
+import { reportService, type ReportType, type CsvExportType, type ReportPreviewResponse } from '../services/reportService'
+import { useAuth } from '../../../hooks/useAuth'
+import { getTodayYmd } from '../../../lib/date-utils'
 
 export function ReportsPage() {
-  const todayStr = new Date().toISOString().substring(0, 10)
+  const { settings } = useAuth()
+  const todayStr = getTodayYmd(settings?.timezone)
 
   // Report configuration state
   const [reportType, setReportType] = useState<ReportType>('DAILY_NUTRITION')
   const [startDate, setStartDate] = useState<string>(todayStr)
   const [endDate, setEndDate] = useState<string>(todayStr)
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
-  const [weightUnit, setWeightUnit] = useState<'KG' | 'LBS'>('KG')
+  const [weightUnit, setWeightUnit] = useState<'KG' | 'LBS'>(() => {
+    return settings?.weightUnit === 'LB' ? 'LBS' : 'KG'
+  })
   const [includeDetails, setIncludeDetails] = useState<boolean>(true)
+
+  // Synchronize weight unit if user preferences change
+  useEffect(() => {
+    if (settings?.weightUnit) {
+      setWeightUnit(settings.weightUnit === 'LB' ? 'LBS' : 'KG')
+    }
+  }, [settings?.weightUnit])
 
   // CSV dropdown open state
   const [csvMenuOpen, setCsvMenuOpen] = useState(false)
@@ -73,7 +80,7 @@ export function ReportsPage() {
 
   useEffect(() => {
     loadPreview()
-  }, [loadPreview])
+  }, [loadPreview, settings?.updatedAt])
 
   // Handle PDF Generation
   const handleDownloadPdf = async () => {

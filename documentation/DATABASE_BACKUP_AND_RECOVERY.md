@@ -1,6 +1,6 @@
 # PROTA — Database Migration, Backup & Disaster Recovery Runbook
 
-**Document Target**: PostgreSQL 16+ / 18.x  
+**Document Target**: Neon PostgreSQL (Free Tier) & Local Development Database  
 **Migration Manager**: Flyway 11 / 12  
 **ORM Validation**: Hibernate (`ddl-auto: validate`)  
 **Operating System**: Windows / PowerShell Compatible Runbook
@@ -9,20 +9,20 @@
 
 ## 1. Important Deployment Philosophy & Choices
 
-When deploying Prota to production, you have **two fundamentally different deployment choices**:
+When deploying Prota to production on Neon, you have **two fundamentally different deployment choices**:
 
-### Choice A: Fresh Production Database (Recommended for New Deployments)
-- You provision a fresh, empty PostgreSQL database on Render.
-- When the Spring Boot application starts up for the first time, Flyway automatically discovers all unapplied migrations (`V1`, `V2`, `V3`, `V4`), creates the `flyway_schema_history` table, executes the migrations transactionally, and initializes a clean schema with zero initial user records.
+### Choice A: Fresh Production Database on Neon (Recommended)
+- You create a fresh, empty project/database on Neon (e.g. `neondb`).
+- When the Spring Boot application starts up on Render for the first time, Flyway automatically discovers all unapplied migrations (`V1`, `V2`, `V3`, `V4`), creates the `flyway_schema_history` table, executes the migrations transactionally, and initializes a clean schema with zero initial user records.
 - **Data Safety**: No historical or development test data is imported. Cleanest and zero risk of corrupting test artifacts into production.
 
-### Choice B: Migrating Existing Local / Development Data to Production
-- If the owner specifically wishes to migrate existing development user accounts, meal histories, or customized foods to the production database:
-- You must create a verified logical dump using `pg_dump`, verify row counts and integrity, and restore into the separate production database.
+### Choice B: Migrating Existing Local Development Data to Neon
+- If the owner specifically wishes to migrate existing development user accounts, meal histories, or customized foods to the production Neon database:
+- You must create a verified logical dump using `pg_dump`, verify row counts and integrity, and restore into the separate Neon database over SSL.
 
 > [!CAUTION]
 > **CRITICAL SAFETY RULES**:
-> 1. Never run `DROP`, `TRUNCATE`, or destructive queries against the production database.
+> 1. Never run `DROP`, `TRUNCATE`, or destructive queries against the production database or local database.
 > 2. Never modify an existing, already-applied Flyway migration file (`V1` through `V4`). Schema alterations must always be implemented as new versioned files (e.g. `V5__...sql`).
 > 3. Always maintain a dated, verified backup before any maintenance window.
 
@@ -88,36 +88,53 @@ if (Test-Path $backupFile) {
 
 ---
 
-## 4. Step 3: Provision a Separate Production Database
+## 4. Step 3: Backing Up from Neon (Production Backup)
 
-In the **Render Dashboard**:
-1. Click **New +** > **PostgreSQL**.
-2. Name: `prota-prod-db`.
-3. Database: `prota`.
-4. User: `prota_user`.
-5. Copy the **External Connection String** (for local CLI access if migrating data) and **Internal Connection String** (for Render backend web service access).
+To take a regular backup directly from Neon PostgreSQL to your local machine:
+
+```powershell
+# Set Neon production connection variables (from Neon console)
+$env:NEON_HOST = "ep-xxxx.us-east-2.aws.neon.tech"
+$env:NEON_USER = "neondb_owner"
+$env:NEON_DB   = "neondb"
+$env:PGPASSWORD = "[YOUR_NEON_PASSWORD]"
+$env:PGSSLMODE = "require"
+
+$neonBackupFile = "$backupDir\neon_prota_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').dump"
+
+& 'C:\Program Files\PostgreSQL\18\bin\pg_dump.exe' `
+    -h $env:NEON_HOST `
+    -p 5432 `
+    -U $env:NEON_USER `
+    -d $env:NEON_DB `
+    -F c `
+    -b `
+    -v `
+    -f $neonBackupFile
+```
 
 ---
 
-## 5. Step 4: Restoring Data to Production (Optional)
+## 5. Step 4: Restoring Local Data to Neon (Optional)
 
 > [!WARNING]
 > Only perform this step if you have explicitly chosen **Choice B (Data Migration)**. For a fresh deployment, skip this step and let Flyway initialize tables on application startup.
 
 ```powershell
-# Set target production database variables (from Render External Connection details)
-$env:PROD_HOST = "dpg-xxxx-a.oregon-postgres.render.com"
-$env:PROD_PORT = "5432"
-$env:PROD_USER = "prota_user"
-$env:PROD_DB   = "prota"
-$env:PGPASSWORD = "[YOUR_RENDER_EXTERNAL_DB_PASSWORD]"
+# Set target Neon production database variables
+$env:NEON_HOST = "ep-xxxx.us-east-2.aws.neon.tech"
+$env:NEON_PORT = "5432"
+$env:NEON_USER = "neondb_owner"
+$env:NEON_DB   = "neondb"
+$env:PGPASSWORD = "[YOUR_NEON_PASSWORD]"
+$env:PGSSLMODE  = "require"
 
-# Restore into production database
+# Restore into Neon production database over SSL
 & 'C:\Program Files\PostgreSQL\18\bin\pg_restore.exe' `
-    -h $env:PROD_HOST `
-    -p $env:PROD_PORT `
-    -U $env:PROD_USER `
-    -d $env:PROD_DB `
+    -h $env:NEON_HOST `
+    -p $env:NEON_PORT `
+    -U $env:NEON_USER `
+    -d $env:NEON_DB `
     -v `
     --no-owner `
     --no-privileges `
@@ -128,7 +145,7 @@ $env:PGPASSWORD = "[YOUR_RENDER_EXTERNAL_DB_PASSWORD]"
 
 ## 6. Step 5: Verify Restored Record Counts & Integrity
 
-Run this verification script to ensure row counts and referential constraints are completely aligned:
+Run this verification query against Neon to confirm row counts:
 
 ```powershell
 $verifyScript = @"
@@ -153,22 +170,21 @@ UNION ALL
 SELECT 'workout_plans', count(*) FROM workout_plans;
 "@
 
-# Run against database
+# Run against Neon over SSL
 & 'C:\Program Files\PostgreSQL\18\bin\psql.exe' `
-    -h $env:PROD_HOST `
-    -p $env:PROD_PORT `
-    -U $env:PROD_USER `
-    -d $env:PROD_DB `
+    -h $env:NEON_HOST `
+    -p 5432 `
+    -U $env:NEON_USER `
+    -d $env:NEON_DB `
     -c $verifyScript
 ```
 
 ---
 
-## 7. Step 6: Flyway Migration History & Conflict Resolution
+## 7. Step 6: Flyway Migration History on Neon
 
-### Inspecting Flyway State
+### Inspecting Flyway State on Neon
 Flyway records each migration's checksum, execution duration, and success flag in `flyway_schema_history`.
-Before starting the backend, you can inspect the table:
 ```sql
 SELECT installed_rank, version, description, execution_time, success 
 FROM flyway_schema_history 
@@ -176,36 +192,26 @@ ORDER BY installed_rank;
 ```
 
 ### Safe Recovery from a Failed Migration
-If a migration fails due to a network interruption or invalid SQL statement:
-1. The transaction will roll back automatically for DDL-compliant operations.
+If a migration fails due to a syntax issue or transient network interruption:
+1. The transaction rolls back automatically for DDL-compliant operations.
 2. In `flyway_schema_history`, the migration will be marked with `success = false`.
 3. To recover safely:
    - Identify the exact error in Render build logs.
-   - Fix the underlying syntax or constraint issue.
-   - Delete the failed history row (if necessary) via:
+   - Clean up the failed migration row:
      ```sql
      DELETE FROM flyway_schema_history WHERE version = 'X' AND success = false;
      ```
-   - Do **NOT** modify already successful migrations (`V1` through `V4`).
+   - Re-deploy. Do **NOT** modify already applied migrations (`V1` through `V4`).
 
 ---
 
-## 8. Step 7: Rollback & Recovery Strategy
+## 8. Step 7: Neon Native Point-in-Time Recovery & Branching
 
-If a newly deployed release fails or encounters unexpected errors in production:
+One of Neon's primary benefits is **instant point-in-time recovery and zero-copy branching**:
 
-1. **Immediate Service Rollback on Render**:
-   - In the Render Dashboard, navigate to **Web Service > Deploys**.
-   - Click on the previous working deploy and click **Rollback to this deploy**.
-   - Render will immediately spin up the previous container version with zero delay.
-2. **Database State Preservation**:
-   - Since Prota migrations are strictly additive (adding new tables/columns like `V2`, `V3`, `V4` rather than dropping or renaming existing ones), rolling back the application code to a prior commit does not break backwards database compatibility.
-   - If a point-in-time database restoration is necessary:
-     ```powershell
-     & 'C:\Program Files\PostgreSQL\18\bin\pg_restore.exe' `
-         -h $env:PROD_HOST -p $env:PROD_PORT -U $env:PROD_USER -d $env:PROD_DB `
-         --clean --if-exists `
-         $backupFile
-     ```
-3. **Local Database Preservation**:
-   - The original local PostgreSQL database on `localhost:5432` remains untouched and intact throughout this process.
+1. **Instant Rollback / Recovery Branching**:
+   - In the **Neon Console**, select your project and navigate to **Branches**.
+   - You can create a new branch from any exact timestamp (point in time) before an incident occurred.
+   - You can point your Render Web Service to the newly branched connection string in seconds.
+2. **Local Database Safety**:
+   - Your local PostgreSQL database on `localhost:5432` remains completely isolated, untouched, and unexposed throughout this process.

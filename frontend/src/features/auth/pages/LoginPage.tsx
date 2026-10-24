@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Mail, Lock, AlertCircle } from 'lucide-react'
+import { Mail, Lock, AlertCircle, Clock } from 'lucide-react'
 import { AuthSplitLayout } from '../components/AuthSplitLayout'
 import { Input } from '../../../components/ui/Input'
 import { PasswordInput } from '../../../components/ui/PasswordInput'
@@ -22,6 +22,7 @@ export function LoginPage() {
 
   // Redirect if already authenticated
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
+  const isSessionExpired = (location.state as { sessionExpired?: boolean })?.sessionExpired
   React.useEffect(() => {
     if (isAuthenticated) {
       navigate(from, { replace: true })
@@ -84,6 +85,18 @@ export function LoginPage() {
       subtitle="Sign in to your account to continue tracking your daily targets."
     >
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        {isSessionExpired && (
+          <div
+            role="status"
+            className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-200 text-xs font-medium flex items-start gap-2.5 animate-in fade-in"
+          >
+            <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 leading-snug">
+              Your session has expired due to inactivity. Please sign in to resume where you left off.
+            </div>
+          </div>
+        )}
+
         {errors.general && (
           <div
             role="alert"

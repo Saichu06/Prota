@@ -121,7 +121,7 @@ export function CalendarPage() {
 
   useEffect(() => {
     fetchRangeData()
-  }, [fetchRangeData])
+  }, [fetchRangeData, settings?.updatedAt])
 
   // Navigation: Period Step (month/week/day)
   const handlePrev = () => {
@@ -410,7 +410,9 @@ export function CalendarPage() {
                   const isToday = ymd === todayYmd
                   const isSelected = ymd === selectedDate
                   const protein = log?.consumedProteinG ?? 0
-                  const proteinGoal = log?.proteinGoalG ?? settings?.proteinGoalG ?? 140
+                  const proteinGoal = isToday
+                    ? (settings?.proteinGoalG ?? log?.proteinGoalG ?? 140)
+                    : (log?.proteinGoalG ?? settings?.proteinGoalG ?? 140)
                   const isGoalMet = hasData && protein >= proteinGoal
 
                   return (
@@ -500,7 +502,9 @@ export function CalendarPage() {
                 const isToday = ymd === todayYmd
                 const isSelected = ymd === selectedDate
                 const protein = log?.consumedProteinG ?? 0
-                const proteinGoal = log?.proteinGoalG ?? settings?.proteinGoalG ?? 140
+                const proteinGoal = isToday
+                  ? (settings?.proteinGoalG ?? log?.proteinGoalG ?? 140)
+                  : (log?.proteinGoalG ?? settings?.proteinGoalG ?? 140)
                 const isGoalMet = hasData && protein >= proteinGoal
 
                 return (
@@ -712,32 +716,45 @@ export function CalendarPage() {
             {selectedLog ? (
               <div className="space-y-4">
                 {/* Protein Goal Card */}
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white space-y-2 border border-slate-200/80 dark:border-slate-800">
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    <span>Protein Target</span>
-                    <span>
-                      {selectedLog.consumedProteinG}g / {selectedLog.proteinGoalG}g
-                    </span>
-                  </div>
+                {(() => {
+                  const isSelectedToday = selectedDate === todayYmd
+                  const activeProteinGoal = isSelectedToday
+                    ? (settings?.proteinGoalG ?? selectedLog.proteinGoalG ?? 140)
+                    : (selectedLog.proteinGoalG ?? settings?.proteinGoalG ?? 140)
+                  const completionPct = activeProteinGoal > 0
+                    ? Math.round(((selectedLog.consumedProteinG || 0) / activeProteinGoal) * 100)
+                    : 0
+                  const remainingG = Math.max(0, Number((activeProteinGoal - (selectedLog.consumedProteinG || 0)).toFixed(1)))
 
-                  <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${Math.min(100, Number(selectedLog.proteinCompletionPercentage) || 0)}%`,
-                      }}
-                    />
-                  </div>
+                  return (
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-900 dark:white space-y-2 border border-slate-200/80 dark:border-slate-800">
+                      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <span>Protein Target</span>
+                        <span>
+                          {selectedLog.consumedProteinG}g / {activeProteinGoal}g
+                        </span>
+                      </div>
 
-                  <div className="flex items-center justify-between text-xs font-bold pt-1">
-                    <span className="text-emerald-600 dark:text-emerald-400">
-                      {selectedLog.proteinCompletionPercentage}% Met
-                    </span>
-                    <span className="text-slate-500 dark:text-slate-400 font-normal">
-                      {selectedLog.proteinRemainingG}g remaining
-                    </span>
-                  </div>
-                </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${Math.min(100, completionPct)}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs font-bold pt-1">
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {completionPct}% Met
+                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-normal">
+                          {remainingG}g remaining
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Macro summary grid */}
                 <div className="grid grid-cols-2 gap-2.5">

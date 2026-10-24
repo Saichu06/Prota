@@ -20,6 +20,8 @@ export interface AuthContextValue {
   uploadAvatar: (file: File) => Promise<UserResponse>
   removeAvatar: () => Promise<UserResponse>
   updateSettings: (data: UpdateSettingsRequest) => Promise<SettingsResponse>
+  serverError?: string | null
+  retryAuth?: () => Promise<void>
   refreshUser: () => Promise<void>
   refreshSettings: () => Promise<void>
 }

@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import {
   User,
   Target,
@@ -59,6 +59,12 @@ export function DietPlanWizard({
   const [heightInches, setHeightInches] = useState<string>('9')
   const [weightValue, setWeightValue] = useState<string>('75')
   const [weightUnit, setWeightUnit] = useState<'KG' | 'LB'>(initialWeightUnit)
+
+  useEffect(() => {
+    if (initialWeightUnit) {
+      setWeightUnit(initialWeightUnit)
+    }
+  }, [initialWeightUnit])
   const [targetWeightValue, setTargetWeightValue] = useState<string>('')
   const [activityLevel, setActivityLevel] = useState<string>('MODERATELY_ACTIVE')
 

@@ -5,12 +5,15 @@ import com.prota.dto.response.SettingsResponse;
 import com.prota.entity.User;
 import com.prota.entity.UserSetting;
 import com.prota.exception.ResourceNotFoundException;
+import com.prota.repo.DailyLogRepository;
 import com.prota.repo.UserRepository;
 import com.prota.repo.UserSettingRepository;
 import com.prota.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
@@ -18,10 +21,14 @@ public class SettingsService {
 
     private final UserSettingRepository userSettingRepository;
     private final UserRepository userRepository;
+    private final DailyLogRepository dailyLogRepository;
 
-    public SettingsService(UserSettingRepository userSettingRepository, UserRepository userRepository) {
+    public SettingsService(UserSettingRepository userSettingRepository,
+                           UserRepository userRepository,
+                           DailyLogRepository dailyLogRepository) {
         this.userSettingRepository = userSettingRepository;
         this.userRepository = userRepository;
+        this.dailyLogRepository = dailyLogRepository;
     }
 
     @Transactional(readOnly = true)
@@ -43,6 +50,8 @@ public class SettingsService {
                 return UserSetting.builder().user(user).build();
             });
 
+        String oldTz = settings.getTimezone();
+
         settings.setProteinGoalG(request.getProteinGoalG());
         settings.setCalorieGoalKcal(request.getCalorieGoalKcal());
         settings.setWaterGoalMl(request.getWaterGoalMl());
@@ -50,7 +59,7 @@ public class SettingsService {
         if (request.getTimezone() != null && !request.getTimezone().isBlank()) {
             String tz = request.getTimezone().trim();
             try {
-                java.time.ZoneId.of(tz);
+                ZoneId.of(tz);
                 settings.setTimezone(tz);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Invalid timezone identifier: " + tz);
@@ -59,6 +68,34 @@ public class SettingsService {
         settings.setTheme(request.getTheme());
 
         UserSetting saved = userSettingRepository.save(settings);
+
+        // Synchronize active ongoing daily log for today so today's daily log reflects updated goals immediately.
+        // Historical logs (past calendar dates) are preserved untouched to honor immutability.
+        String newTz = saved.getTimezone() != null ? saved.getTimezone() : "UTC";
+        LocalDate todayNew = LocalDate.now(ZoneId.of(newTz));
+        dailyLogRepository.findByUserIdAndLogDate(currentUserId, todayNew).ifPresent(todayLog -> {
+            todayLog.setProteinGoalG(saved.getProteinGoalG());
+            todayLog.setCalorieGoalKcal(saved.getCalorieGoalKcal());
+            todayLog.setWaterGoalMl(saved.getWaterGoalMl());
+            dailyLogRepository.save(todayLog);
+        });
+
+        // If timezone changed, also sync if old timezone's today had an active uncommitted log
+        if (oldTz != null && !oldTz.equalsIgnoreCase(newTz)) {
+            try {
+                LocalDate todayOld = LocalDate.now(ZoneId.of(oldTz));
+                if (!todayOld.equals(todayNew)) {
+                    dailyLogRepository.findByUserIdAndLogDate(currentUserId, todayOld).ifPresent(oldLog -> {
+                        oldLog.setProteinGoalG(saved.getProteinGoalG());
+                        oldLog.setCalorieGoalKcal(saved.getCalorieGoalKcal());
+                        oldLog.setWaterGoalMl(saved.getWaterGoalMl());
+                        dailyLogRepository.save(oldLog);
+                    });
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
         return mapToResponse(saved);
     }
 

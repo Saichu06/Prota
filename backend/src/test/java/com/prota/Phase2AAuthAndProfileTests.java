@@ -411,6 +411,75 @@ class Phase2AAuthAndProfileTests {
         assertThat(reReadLog.getCalorieGoalKcal()).isEqualByComparingTo(new BigDecimal("2000.00"));
     }
 
+    @Test
+    @DisplayName("Preferences Synchronization: Updating settings updates today's active daily log goals immediately")
+    void testSettingsUpdateSyncsTodayDailyLogWhilePreservingHistoricalSnapshots() throws Exception {
+        String email = "sync-test-" + UUID.randomUUID() + "@example.com";
+        MockHttpSession session = registerUser(email, "Password123!", "Sync User");
+        User user = userRepository.findByEmail(email).orElseThrow();
+
+        // 1. Create a daily log for TODAY with old snapshot goals (140g protein, 2000kcal, 2500ml water)
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("UTC"));
+        DailyLog todayLog = DailyLog.builder()
+            .user(user)
+            .logDate(today)
+            .timezoneAtCreation("UTC")
+            .proteinGoalG(new BigDecimal("140.00"))
+            .calorieGoalKcal(new BigDecimal("2000.00"))
+            .waterGoalMl(2500)
+            .build();
+        dailyLogRepository.save(todayLog);
+
+        // 2. Also create a past daily log (yesterday)
+        LocalDate yesterday = today.minusDays(1);
+        DailyLog pastLog = DailyLog.builder()
+            .user(user)
+            .logDate(yesterday)
+            .timezoneAtCreation("UTC")
+            .proteinGoalG(new BigDecimal("140.00"))
+            .calorieGoalKcal(new BigDecimal("2000.00"))
+            .waterGoalMl(2500)
+            .build();
+        dailyLogRepository.save(pastLog);
+
+        // 3. User updates preferences to 185g protein, 2400kcal, 3000ml water
+        UpdateSettingsRequest updateReq = UpdateSettingsRequest.builder()
+            .proteinGoalG(new BigDecimal("185.00"))
+            .calorieGoalKcal(new BigDecimal("2400.00"))
+            .waterGoalMl(3000)
+            .weightUnit(WeightUnit.KG)
+            .timezone("UTC")
+            .theme(ThemePreference.DARK)
+            .build();
+
+        mockMvc.perform(patch("/settings").with(csrf()).session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateReq)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.proteinGoalG").value(185.0))
+            .andExpect(jsonPath("$.calorieGoalKcal").value(2400.0))
+            .andExpect(jsonPath("$.waterGoalMl").value(3000));
+
+        // 4. Verify today's daily log in PostgreSQL was updated immediately
+        DailyLog updatedTodayLog = dailyLogRepository.findByUserIdAndLogDate(user.getId(), today).orElseThrow();
+        assertThat(updatedTodayLog.getProteinGoalG()).isEqualByComparingTo(new BigDecimal("185.00"));
+        assertThat(updatedTodayLog.getCalorieGoalKcal()).isEqualByComparingTo(new BigDecimal("2400.00"));
+        assertThat(updatedTodayLog.getWaterGoalMl()).isEqualTo(3000);
+
+        // 5. Verify past daily log (yesterday) remains untouched
+        DailyLog unchangedPastLog = dailyLogRepository.findByUserIdAndLogDate(user.getId(), yesterday).orElseThrow();
+        assertThat(unchangedPastLog.getProteinGoalG()).isEqualByComparingTo(new BigDecimal("140.00"));
+        assertThat(unchangedPastLog.getCalorieGoalKcal()).isEqualByComparingTo(new BigDecimal("2000.00"));
+        assertThat(unchangedPastLog.getWaterGoalMl()).isEqualTo(2500);
+
+        // 6. Verify GET /logs/daily?date={today} returns the updated goals
+        mockMvc.perform(get("/logs/daily").param("date", today.toString()).session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.proteinGoalG").value(185.0))
+            .andExpect(jsonPath("$.calorieGoalKcal").value(2400.0))
+            .andExpect(jsonPath("$.waterGoalMl").value(3000));
+    }
+
     private MockHttpSession registerUser(String email, String password, String fullName) throws Exception {
         RegisterRequest req = RegisterRequest.builder()
             .fullName(fullName)

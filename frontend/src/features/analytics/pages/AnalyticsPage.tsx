@@ -58,7 +58,7 @@ export function AnalyticsPage() {
 
   useEffect(() => {
     fetchAnalytics()
-  }, [fetchAnalytics])
+  }, [fetchAnalytics, settings?.updatedAt])
 
   const weightUnit = settings?.weightUnit || 'KG'
 

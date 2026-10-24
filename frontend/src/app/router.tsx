@@ -1,7 +1,9 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
 import { ProtectedRoute } from './guards/ProtectedRoute'
 import { PublicOnlyRoute } from './guards/PublicOnlyRoute'
+import { RootRouteErrorBoundary } from './RootRouteErrorBoundary'
+import { NotFoundPage } from '../features/notfound/NotFoundPage'
 import { HomePage } from '../features/home/HomePage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { RegisterPage } from '../features/auth/pages/RegisterPage'
@@ -25,16 +27,19 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <HomePage />,
+    errorElement: <RootRouteErrorBoundary />,
   },
 
   // Public editorial blogs routes
   {
     path: '/blogs',
     element: <BlogsPage />,
+    errorElement: <RootRouteErrorBoundary />,
   },
   {
     path: '/blogs/:slug',
     element: <BlogDetailPage />,
+    errorElement: <RootRouteErrorBoundary />,
   },
 
   // Public auth routes
@@ -45,6 +50,7 @@ export const router = createBrowserRouter([
         <LoginPage />
       </PublicOnlyRoute>
     ),
+    errorElement: <RootRouteErrorBoundary />,
   },
   {
     path: '/register',
@@ -53,6 +59,7 @@ export const router = createBrowserRouter([
         <RegisterPage />
       </PublicOnlyRoute>
     ),
+    errorElement: <RootRouteErrorBoundary />,
   },
 
   // Protected application routes
@@ -62,6 +69,7 @@ export const router = createBrowserRouter([
         <AppShell />
       </ProtectedRoute>
     ),
+    errorElement: <RootRouteErrorBoundary />,
     children: [
       {
         path: 'dashboard',
@@ -114,9 +122,10 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Fallback catch-all
+  // Catch-all: Explicit 404 Page Not Found
   {
     path: '*',
-    element: <Navigate to="/" replace />,
+    element: <NotFoundPage />,
+    errorElement: <RootRouteErrorBoundary />,
   },
 ])

@@ -57,7 +57,7 @@ export function ImproveProgressPage() {
 
   useEffect(() => {
     fetchAnalysis()
-  }, [fetchAnalysis])
+  }, [fetchAnalysis, settings?.updatedAt])
 
   const weightUnit = (settings?.weightUnit as WeightUnit) || 'KG'
 

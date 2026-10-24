@@ -28,7 +28,7 @@ import { WaterModal } from '../components/WaterModal'
 import { WeightModal } from '../components/WeightModal'
 import { Button } from '../../../components/ui/Button'
 import { getTodayYmd, isValidYmd } from '../../../lib/date-utils'
-import type { DailyLogResponse, FoodEntryResponse, MealType } from '../../../types/api'
+import type { DailyLogResponse, FoodEntryResponse, MealType, WeightUnit } from '../../../types/api'
 
 interface MealGroupConfig {
   type: MealType
@@ -102,7 +102,7 @@ export function FoodLogPage() {
 
   useEffect(() => {
     fetchDailyLog(selectedDate)
-  }, [selectedDate, fetchDailyLog])
+  }, [selectedDate, settings?.updatedAt, fetchDailyLog])
 
   const handleDeleteFoodEntry = async () => {
     if (!entryToDelete || isDeleting) return
@@ -119,11 +119,19 @@ export function FoodLogPage() {
     }
   }
 
-  // Goals & Totals
-  const proteinGoal = dailyLog?.proteinGoalG ?? settings?.proteinGoalG ?? 140
-  const calorieGoal = dailyLog?.calorieGoalKcal ?? settings?.calorieGoalKcal ?? 2000
-  const waterGoal = dailyLog?.waterGoalMl ?? settings?.waterGoalMl ?? 2500
-  const weightUnit = settings?.weightUnit || 'KG'
+  // Single source of truth: For today, active preferences immediately govern goals.
+  // Historical calendar dates preserve their stored snapshots.
+  const isToday = !searchParams.get('date') || selectedDate === getTodayYmd(settings?.timezone)
+  const proteinGoal = isToday
+    ? (settings?.proteinGoalG ?? dailyLog?.proteinGoalG ?? 140)
+    : (dailyLog?.proteinGoalG ?? settings?.proteinGoalG ?? 140)
+  const calorieGoal = isToday
+    ? (settings?.calorieGoalKcal ?? dailyLog?.calorieGoalKcal ?? 2000)
+    : (dailyLog?.calorieGoalKcal ?? settings?.calorieGoalKcal ?? 2000)
+  const waterGoal = isToday
+    ? (settings?.waterGoalMl ?? dailyLog?.waterGoalMl ?? 2500)
+    : (dailyLog?.waterGoalMl ?? settings?.waterGoalMl ?? 2500)
+  const weightUnit = (settings?.weightUnit as WeightUnit) || 'KG'
 
   const consumedProtein = dailyLog?.consumedProteinG ?? 0
   const consumedCalories = dailyLog?.consumedCaloriesKcal ?? 0

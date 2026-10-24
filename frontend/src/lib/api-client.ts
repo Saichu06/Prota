@@ -28,6 +28,8 @@ interface RequestOptions extends RequestInit {
   skipCsrf?: boolean
 }
 
+const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`
   const method = (options.method || 'GET').toUpperCase()
@@ -48,43 +50,70 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    method,
-    headers,
-    credentials: 'include', // Mandatory for server-managed session cookies
-  })
+  const maxRetries = method === 'GET' ? 2 : 0
+  let attempt = 0
 
-  // Handle 204 No Content
-  if (response.status === 204) {
-    return undefined as unknown as T
-  }
+  while (attempt <= maxRetries) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        method,
+        headers,
+        credentials: 'include', // Mandatory for server-managed session cookies
+      })
 
-  const contentType = response.headers.get('content-type')
-  const isJson = contentType && contentType.includes('application/json')
-
-  if (!response.ok) {
-    let errorData: ErrorResponse | null = null
-    if (isJson) {
-      try {
-        errorData = (await response.json()) as ErrorResponse
-      } catch {
-        // Fallback below
+      // If Render/proxy returned a gateway wake-up error (502, 503, 504) on GET, retry before failing
+      if (method === 'GET' && [502, 503, 504].includes(response.status) && attempt < maxRetries) {
+        attempt++
+        await waitMs(1500)
+        continue
       }
+
+      // Handle 204 No Content
+      if (response.status === 204) {
+        return undefined as unknown as T
+      }
+
+      const contentType = response.headers.get('content-type')
+      const isJson = contentType && contentType.includes('application/json')
+
+      if (!response.ok) {
+        let errorData: ErrorResponse | null = null
+        if (isJson) {
+          try {
+            errorData = (await response.json()) as ErrorResponse
+          } catch {
+            // Fallback below
+          }
+        }
+
+        const status = response.status
+        const code = errorData?.code || (status === 401 ? 'UNAUTHENTICATED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'API_ERROR')
+        const message = errorData?.message || (status === 401 ? 'Session expired or not authenticated. Please log in.' : status === 403 ? 'Access forbidden or CSRF validation failed.' : `Request failed with status ${status}`)
+
+        throw new ApiError(status, code, message, errorData?.fieldErrors, errorData?.details)
+      }
+
+      if (isJson) {
+        return (await response.json()) as T
+      }
+
+      return (await response.text()) as unknown as T
+    } catch (err: unknown) {
+      // If network failed (e.g. timeout during Render wake up) on GET, retry before re-throwing
+      if (err instanceof ApiError) {
+        throw err
+      }
+      if (method === 'GET' && attempt < maxRetries) {
+        attempt++
+        await waitMs(1500)
+        continue
+      }
+      throw err
     }
-
-    const status = response.status
-    const code = errorData?.code || (status === 401 ? 'UNAUTHENTICATED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'API_ERROR')
-    const message = errorData?.message || (status === 401 ? 'Session expired or not authenticated. Please log in.' : status === 403 ? 'Access forbidden or CSRF validation failed.' : `Request failed with status ${status}`)
-
-    throw new ApiError(status, code, message, errorData?.fieldErrors, errorData?.details)
   }
 
-  if (isJson) {
-    return (await response.json()) as T
-  }
-
-  return (await response.text()) as unknown as T
+  throw new ApiError(504, 'GATEWAY_TIMEOUT', 'Service unavailable or wake-up timed out. Please try again.')
 }
 
 export const apiClient = {
